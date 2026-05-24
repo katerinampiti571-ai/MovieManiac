@@ -1,4 +1,4 @@
-package com.example.moviemaniac
+package com.example.videoclub
 
 import org.junit.Test
 

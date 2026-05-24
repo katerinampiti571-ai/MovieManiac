@@ -1,4 +1,4 @@
-package com.example.moviemaniac.ui.theme
+package com.example.videoclub.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
