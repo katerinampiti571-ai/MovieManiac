@@ -1,37 +1,31 @@
 package com.example.videoclub.presetantion.home
 
+import app.cash.turbine.test
+import app.cash.turbine.turbineScope
 import com.example.videoclub.MainDispatcherRule
-import com.example.videoclub.data.domain.Movie
-import com.example.videoclub.homeScreen.HomeNavigationTarget
-import com.example.videoclub.homeScreen.HomeUiAction
-import com.example.videoclub.homeScreen.HomeUiState
-import com.example.videoclub.homeScreen.HomeViewModel
-import com.example.videoclub.homeScreen.usecase.ClearMoviesUseCase
-import com.example.videoclub.homeScreen.usecase.ObservePopularMoviesUseCase
-import com.example.videoclub.homeScreen.usecase.SyncPopularMoviesUseCase
-import com.example.videoclub.network.model.MovieResponseDto
+import com.example.videoclub.data.domain.model.Movie
+import com.example.videoclub.data.domain.model.PopularMoviesMetadata
+import com.example.videoclub.home.HomeNavigationTarget
+import com.example.videoclub.home.HomeUiAction
+import com.example.videoclub.home.HomeUiState
+import com.example.videoclub.home.HomeViewModel
+import com.example.videoclub.home.usecase.ClearMoviesUseCase
+import com.example.videoclub.home.usecase.ObservePopularMoviesUseCase
+import com.example.videoclub.home.usecase.SyncPopularMoviesUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import org.junit.Test
 import io.mockk.mockk
-import io.mockk.verify
 import junit.framework.TestCase.assertEquals
-import junit.framework.TestCase.assertFalse
-import junit.framework.TestCase.assertTrue
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.runTest
-import kotlin.collections.emptyList
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceUntilIdle
-import org.junit.Rule
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.test.runCurrent
-import java.io.IOException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -46,14 +40,8 @@ class HomeViewModelTest {
     private val clearMoviesUseCase =
         mockk<ClearMoviesUseCase>()
 
-
-    @Test
-    fun init_clearsMoviesAndLoadsFirstPage() = runTest {
-        //Given
-        every {
-            observePopularMoviesUseCase()
-        } returns flowOf(emptyList())
-
+    @Before
+    fun setUp() {
         coEvery {
             clearMoviesUseCase()
         } returns Unit
@@ -61,340 +49,378 @@ class HomeViewModelTest {
         coEvery {
             syncPopularMoviesUseCase(1)
         } returns Result.success(
-            MovieResponseDto(
+            PopularMoviesMetadata(
                 page = 1,
                 totalPages = 10,
-                popularMovies = emptyList()
             )
         )
+    }
+
+    @Test
+    fun `given initial state movies are cleared and first page is loading`() = runTest {
+        //Given
+        every {
+            observePopularMoviesUseCase()
+        } returns flowOf(emptyList())
+
         //When
         HomeViewModel(
             observePopularMoviesUseCase,
             syncPopularMoviesUseCase,
             clearMoviesUseCase
         )
+
         //Then
         coVerify {
             clearMoviesUseCase()
         }
+
         coVerify {
             syncPopularMoviesUseCase(1)
         }
     }
-    @Test //ViewModel correctly transforms the domain models into UI models.
-    fun uiState_returnsMoviesFromUseCase() = runTest {
-        // Given
-        val movies = listOf(
-            Movie(
-                id = "1",
-                imageUrl = "batman.jpg",
-                title = "Batman",
-                overview = "Batman overview",
-                isFavorite = false
-            ),
-            Movie(
-                id = "2",
-                imageUrl = "superman.jpg",
-                title = "Superman",
-                overview = "Superman overview",
-                isFavorite = true
+
+    @Test
+    fun `the initial uiState contains the returned movies and the next page is not loading`() =
+        runTest {
+            // Given
+            val movies = listOf(
+                Movie(
+                    id = "1",
+                    imageUrl = "batman.jpg",
+                    title = "Batman",
+                    overview = "Batman overview",
+                    isFavorite = false
+                ),
+                Movie(
+                    id = "2",
+                    imageUrl = "superman.jpg",
+                    title = "Superman",
+                    overview = "Superman overview",
+                    isFavorite = true
+                )
             )
-        )
+
+            every {
+                observePopularMoviesUseCase()
+            } returns flowOf(movies)
+
+            val viewModel = HomeViewModel(
+                observePopularMoviesUseCase = observePopularMoviesUseCase,
+                syncPopularMoviesUseCase = syncPopularMoviesUseCase,
+                clearMoviesUseCase = clearMoviesUseCase
+            )
+
+            viewModel.uiState.test {
+                // Then
+                assertEquals(
+                    HomeUiState.Data(
+                        movies = listOf(
+                            HomeUiState.Data.Movie(
+                                id = "1",
+                                imageUrl = "batman.jpg",
+                                title = "Batman",
+                            ),
+                            HomeUiState.Data.Movie(
+                                id = "2",
+                                imageUrl = "superman.jpg",
+                                title = "Superman",
+                            ),
+                        ),
+                        isLoadingNextPage = false,
+                    ),
+                    awaitItem()
+                )
+            }
+        }
+
+    @Test
+    fun `when load next page is requested, then syncing next page is performed and uiState is updated`() =
+        runTest {
+            // Given
+            val movies = MutableStateFlow(
+                listOf(
+                    Movie(
+                        id = "1",
+                        imageUrl = "batman.jpg",
+                        title = "Batman",
+                        overview = "Batman overview",
+                        isFavorite = false
+                    ),
+                    Movie(
+                        id = "2",
+                        imageUrl = "superman.jpg",
+                        title = "Superman",
+                        overview = "Superman overview",
+                        isFavorite = true
+                    )
+                )
+            )
+
+            every {
+                observePopularMoviesUseCase()
+            } returns movies
+
+            coEvery {
+                syncPopularMoviesUseCase(page = 2)
+            } answers {
+                movies.value += Movie(
+                    id = "3",
+                    imageUrl = "spiderman.jpg",
+                    title = "Spiderman",
+                    overview = "Spiderman overview",
+                    isFavorite = false
+                )
+
+                Result.success(
+                    PopularMoviesMetadata(
+                        page = 2,
+                        totalPages = 10,
+                    )
+                )
+            }
+
+            val viewModel = HomeViewModel(
+                observePopularMoviesUseCase = observePopularMoviesUseCase,
+                syncPopularMoviesUseCase = syncPopularMoviesUseCase,
+                clearMoviesUseCase = clearMoviesUseCase
+            )
+
+            viewModel.uiState.test {
+                skipItems(1) // Skip the first UiState
+
+
+                // When
+                viewModel.onAction(HomeUiAction.LoadNextPage)
+
+                // Then
+                coVerify(exactly = 1) {
+                    syncPopularMoviesUseCase(page = 2)
+                }
+
+                assertEquals(
+                    HomeUiState.Data(
+                        movies = listOf(
+                            HomeUiState.Data.Movie(
+                                id = "1",
+                                imageUrl = "batman.jpg",
+                                title = "Batman",
+                            ),
+                            HomeUiState.Data.Movie(
+                                id = "2",
+                                imageUrl = "superman.jpg",
+                                title = "Superman",
+                            ),
+                        ),
+                        isLoadingNextPage = true,
+                    ),
+                    awaitItem()
+                )
+
+                assertEquals(
+                    HomeUiState.Data(
+                        movies = listOf(
+                            HomeUiState.Data.Movie(
+                                id = "1",
+                                imageUrl = "batman.jpg",
+                                title = "Batman",
+                            ),
+                            HomeUiState.Data.Movie(
+                                id = "2",
+                                imageUrl = "superman.jpg",
+                                title = "Superman",
+                            ),
+                            HomeUiState.Data.Movie(
+                                id = "3",
+                                imageUrl = "spiderman.jpg",
+                                title = "Spiderman",
+                            ),
+                        ),
+                        isLoadingNextPage = false,
+                    ),
+                    awaitItem()
+                )
+            }
+        }
+
+    @Test
+    fun `when movie is clicked, then navigate to movie details`() = runTest {
+        // Given
         every {
             observePopularMoviesUseCase()
-        } returns flowOf(movies)
-    //"When the ViewModel calls observePopularMoviesUseCase(),
-    //return these two movies."
-        coEvery {
-            clearMoviesUseCase()
-        } returns Unit
-        coEvery {
-            syncPopularMoviesUseCase(1)
-        } returns Result.success(
-            MovieResponseDto(
-                page = 1,
-                totalPages = 10,
-                popularMovies = emptyList()
-            )
-        )
-        // When
+        } returns flowOf(emptyList())
+
         val viewModel = HomeViewModel(
             observePopularMoviesUseCase,
             syncPopularMoviesUseCase,
             clearMoviesUseCase
         )
-        // Start observing uiState
-        val state = viewModel.uiState.first {
-            it is HomeUiState.Data
-        }
 
-        advanceUntilIdle()
-    //Without this, your test might read uiState
-    // before the ViewModel has finished its work.
+        viewModel.navigation.test {
+            // When
+            viewModel.onAction(HomeUiAction.MovieClicked(movieId = "spiderman-01"))
 
-        // Then
-        assertTrue(state is HomeUiState.Data)
-    //This checks that the ViewModel is
-    //no longer in the Loading state.
+            advanceUntilIdle()
 
-        val data = state as HomeUiState.Data
-
-        assertEquals(2, data.movies.size)
-
-        assertEquals("1", data.movies[0].id)
-        assertEquals("Batman", data.movies[0].title)
-        assertEquals("batman.jpg", data.movies[0].imageUrl)
-
-        assertEquals("2", data.movies[1].id)
-        assertEquals("Superman", data.movies[1].title)
-        assertEquals("superman.jpg", data.movies[1].imageUrl)
-
-        assertFalse(data.isLoadingMore)
-    }
-    @Test
-    fun loadNextPage_loadsSecondPage() = runTest {
-        // Given
-        every {
-            observePopularMoviesUseCase()
-        } returns flowOf(emptyList())
-        coEvery {
-            clearMoviesUseCase()
-        } returns Unit
-        coEvery {
-            syncPopularMoviesUseCase(1)
-        } returns Result.success(
-            MovieResponseDto(
-                page = 1,
-                totalPages = 10,
-                popularMovies = emptyList()
+            // Then
+            assertEquals(
+                HomeNavigationTarget.Details("spiderman-01"),
+                awaitItem()
             )
-        )
-
-        coEvery {
-            syncPopularMoviesUseCase(2)
-        } returns Result.success(
-            MovieResponseDto(
-                page = 2,
-                totalPages = 10,
-                popularMovies = emptyList()
-            )
-        )
-        // When
-        val viewModel = HomeViewModel(
-            observePopularMoviesUseCase,
-            syncPopularMoviesUseCase,
-            clearMoviesUseCase
-        )
-        advanceUntilIdle()
-        viewModel.onAction(HomeUiAction.LoadNextPage)
-        // Then
-        advanceUntilIdle()
-        coVerify(exactly = 1) {
-            syncPopularMoviesUseCase(2)
-        }
-        coVerify(exactly = 1) {
-            syncPopularMoviesUseCase(1)
         }
     }
+
     @Test
-    fun onMovieClick_emitsNavigationEvent() = runTest {
-        // Given
-        every {
-            observePopularMoviesUseCase()
-        } returns flowOf(emptyList())
-
-        coEvery {
-            clearMoviesUseCase()
-        } returns Unit
-
-        coEvery {
-            syncPopularMoviesUseCase(1)
-        } returns Result.success(
-            MovieResponseDto(
-                page = 1,
-                totalPages = 10,
-                popularMovies = emptyList()
+    fun `given loading next page, when load next page is requested, then pages don't load twice`() =
+        runTest {
+            // Given
+            val movies = MutableStateFlow(
+                listOf(
+                    Movie(
+                        id = "1",
+                        imageUrl = "batman.jpg",
+                        title = "Batman",
+                        overview = "Batman overview",
+                        isFavorite = false
+                    ),
+                    Movie(
+                        id = "2",
+                        imageUrl = "superman.jpg",
+                        title = "Superman",
+                        overview = "Superman overview",
+                        isFavorite = true
+                    )
+                )
             )
-        )
 
-        val viewModel = HomeViewModel(
-            observePopularMoviesUseCase,
-            syncPopularMoviesUseCase,
-            clearMoviesUseCase
-        )
-        // Start waiting for the navigation event
-        val navigationDeferred = async {
-            viewModel.navigation.first()
+            every {
+                observePopularMoviesUseCase()
+            } returns movies
+
+            val completeRequest = CompletableDeferred<PopularMoviesMetadata>()
+
+            coEvery {
+                syncPopularMoviesUseCase(page = 2)
+            } coAnswers {
+                Result.success(completeRequest.await())
+            }
+
+            // When
+            val viewModel = HomeViewModel(
+                observePopularMoviesUseCase,
+                syncPopularMoviesUseCase,
+                clearMoviesUseCase
+            )
+
+            viewModel.uiState.test {
+                skipItems(1) // Skip the first UiState
+
+                viewModel.onAction(HomeUiAction.LoadNextPage)
+                awaitItem()
+
+                // When
+                viewModel.onAction(HomeUiAction.LoadNextPage)
+                completeRequest.complete(
+                    PopularMoviesMetadata(
+                        page = 2,
+                        totalPages = 10
+                    )
+                )
+
+                // Then
+                coVerify(exactly = 1) {
+                    syncPopularMoviesUseCase(2)
+                }
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 
-        advanceUntilIdle()
 
-        // When
-        viewModel.onMovieClick("123")
-
-        advanceUntilIdle()
-
-        // Then
-        assertEquals(
-            HomeNavigationTarget.Details("123"),
-            navigationDeferred.await()
-        )
-    }
-
-    //if duplicate loading
     @Test
-    fun loadNextPage_doesNotLoadTwiceWhileAlreadyLoading() = runTest {
+    fun `given no more pages, when load next page is requested, then nothing happens`() = runTest {
         // Given
-        every {
-            observePopularMoviesUseCase()
-        } returns flowOf(emptyList())
-
-        coEvery {
-            clearMoviesUseCase()
-        } returns Unit
-        // First page loading
-        coEvery {
-            syncPopularMoviesUseCase(1)
-        } returns Result.success(
-            MovieResponseDto(
-                page = 1,
-                totalPages = 10,
-                popularMovies = emptyList()
+        val movies = MutableStateFlow(
+            listOf(
+                Movie(
+                    id = "1",
+                    imageUrl = "batman.jpg",
+                    title = "Batman",
+                    overview = "Batman overview",
+                    isFavorite = false
+                ),
+                Movie(
+                    id = "2",
+                    imageUrl = "superman.jpg",
+                    title = "Superman",
+                    overview = "Superman overview",
+                    isFavorite = true
+                )
             )
         )
-        // This controls when page 2 finishes loading
-        val apiCallFinished = CompletableDeferred<Unit>()
-        // Second page loading
+
+        every {
+            observePopularMoviesUseCase()
+        } returns movies
+
         coEvery {
-            syncPopularMoviesUseCase(2)
+            syncPopularMoviesUseCase(page = 1)
         } coAnswers {
-            // Keep this API call running
-            apiCallFinished.await()
             Result.success(
-                MovieResponseDto(
-                    page = 2,
-                    totalPages = 10,
-                    popularMovies = emptyList()
+                PopularMoviesMetadata(
+                    totalPages = 1,
+                    page = 1,
                 )
             )
         }
-        // When
-        val viewModel = HomeViewModel(
-            observePopularMoviesUseCase,
-            syncPopularMoviesUseCase,
-            clearMoviesUseCase
-        )
-        // Wait for initial page (page 1)
-        advanceUntilIdle()
-        // User reaches the bottom -> first request
-        viewModel.onAction(HomeUiAction.LoadNextPage)
-        // Allow the coroutine to start
-        runCurrent()
-        // User reaches the bottom again while page 2 is still loading
-        viewModel.onAction(HomeUiAction.LoadNextPage)
-        // Finish the fake API call
-        apiCallFinished.complete(Unit)
-        // Let remaining coroutines finish
-        advanceUntilIdle()
-        // Then
-        coVerify(exactly = 1) {
-            syncPopularMoviesUseCase(2)
-        }
-    }
-    @Test
-    fun loadNextPage_doesNotLoadWhenThereAreNoMorePages() = runTest {
-        // Given
-        every {
-            observePopularMoviesUseCase()
-        } returns flowOf(emptyList())
-        coEvery {
-            clearMoviesUseCase()
-        } returns Unit
-        // First page is the last page
-        coEvery {
-            syncPopularMoviesUseCase(1)
-        } returns Result.success(
-            MovieResponseDto(
-                page = 1,
-                totalPages = 1,
-                popularMovies = emptyList()
-            )
-        )
-        // When
-        val viewModel = HomeViewModel(
-            observePopularMoviesUseCase,
-            syncPopularMoviesUseCase,
-            clearMoviesUseCase
-        )
-        // Wait for initial loading
-        advanceUntilIdle()
-        // User tries to load more
-        viewModel.onAction(HomeUiAction.LoadNextPage)
-        advanceUntilIdle()
-        // Then
-        coVerify(exactly = 0) {
-            syncPopularMoviesUseCase(2)
-        }
-    }
-    @Test
-    fun loadNextPage_doesNotLoadAfterFailure() = runTest {
-        // Given
-        every {
-            observePopularMoviesUseCase()
-        } returns flowOf(emptyList())
-        coEvery {
-            clearMoviesUseCase()
-        } returns Unit
-        // Initial API call fails
-        coEvery {
-            syncPopularMoviesUseCase(1)
-        } returns Result.failure(
-            Exception("Network error")
-        )
-        // When
-        val viewModel = HomeViewModel(
-            observePopularMoviesUseCase,
-            syncPopularMoviesUseCase,
-            clearMoviesUseCase
-        )
-        advanceUntilIdle()
-        // User tries to load next page
-        viewModel.onAction(HomeUiAction.LoadNextPage)
-        advanceUntilIdle()
-        // Then
-        coVerify(exactly = 0) {
-            syncPopularMoviesUseCase(2)
-        }
-    }
-    @Test
-    fun loadPage_failure_emitsErrorState() = runTest {
-        // Given
-        every {
-            observePopularMoviesUseCase()
-        } returns flowOf(emptyList())
-        coEvery {
-            clearMoviesUseCase()
-        } returns Unit
-        coEvery {
-            syncPopularMoviesUseCase(1)
-        } returns Result.failure(
-            IOException("No internet")
-        )
-        // When
-        val viewModel = HomeViewModel(
-            observePopularMoviesUseCase,
-            syncPopularMoviesUseCase,
-            clearMoviesUseCase
-        )
-        // Then
-        val state = viewModel.uiState.first {
-            it is HomeUiState.Error
-        }
-        assertTrue(state is HomeUiState.Error)
 
-        assertEquals(
-            "No internet connection",
-            (state as HomeUiState.Error).message
+        // When
+        val viewModel = HomeViewModel(
+            observePopularMoviesUseCase,
+            syncPopularMoviesUseCase,
+            clearMoviesUseCase
         )
+
+        viewModel.uiState.test {
+            skipItems(1) // Skip the first UiState
+
+            // When
+            viewModel.onAction(HomeUiAction.LoadNextPage)
+
+            // Then
+            expectNoEvents()
+        }
+    }
+
+
+    @Test
+    fun `given the sync fails, then UiState shows error`() = runTest {
+        // Given
+        every {
+            observePopularMoviesUseCase()
+        } returns flowOf(emptyList())
+
+        coEvery {
+            syncPopularMoviesUseCase(1)
+        } returns Result.failure(Throwable("404"))
+
+        turbineScope {
+            val viewModel = HomeViewModel(
+                observePopularMoviesUseCase = observePopularMoviesUseCase,
+                syncPopularMoviesUseCase = syncPopularMoviesUseCase,
+                clearMoviesUseCase = clearMoviesUseCase
+            )
+
+            viewModel.uiState.test {
+                // Then
+                assertEquals(
+                    HomeUiState.Error(
+                        message = "Something went wrong"
+                    ),
+                    awaitItem()
+                )
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
     }
 }

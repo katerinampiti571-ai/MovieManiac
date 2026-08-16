@@ -3,13 +3,9 @@ package com.example.videoclub.details
 import androidx.lifecycle.SavedStateHandle
 import androidx.navigation.toRoute
 import app.cash.turbine.test
-import com.example.videoclub.data.domain.Movie
-import com.example.videoclub.detailsScreen.DetailsNavigationTarget
-import com.example.videoclub.detailsScreen.DetailsRoute
-import com.example.videoclub.detailsScreen.DetailsUiState
-import com.example.videoclub.detailsScreen.DetailsViewModel
-import com.example.videoclub.detailsScreen.usecase.ObserveMovieDetailsUseCase
-import com.example.videoclub.detailsScreen.usecase.SetMovieFavoriteUseCase
+import com.example.videoclub.data.domain.model.Movie
+import com.example.videoclub.details.usecase.ObserveMovieDetailsUseCase
+import com.example.videoclub.details.usecase.SetMovieFavoriteUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -44,17 +40,26 @@ class DetailsViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkStatic("androidx.navigation.SavedStateHandleKt")
     }
 
     @Before
     fun setup() {
+        mockk<SavedStateHandle>()
+        mockkStatic("androidx.navigation.SavedStateHandleKt")
+        every {
+            savedStateHandle.toRoute<DetailsRoute>()
+        } returns DetailsRoute(
+            movieId = "1"
+        )
+
         Dispatchers.setMain(testDispatcher)
         observeMovieDetailsUseCase = mockk()
         setMovieFavouriteUseCase = mockk()
     }
 
     @Test
-    fun observeMovie_whenMovieExists_updatesUiStateToData() = runTest {
+    fun `given movie id is resolved, then uiState displays data for this movie`() = runTest {
         // Given
         val movie = Movie(
             id = "1",
@@ -63,24 +68,22 @@ class DetailsViewModelTest {
             imageUrl = "image.jpg",
             isFavorite = false
         )
+
         every {
             observeMovieDetailsUseCase("1")
         } returns flowOf(movie)
-        mockkStatic("androidx.navigation.SavedStateHandleKt")
-        // When
-        every {
-            savedStateHandle.toRoute<DetailsRoute>()
-        } returns DetailsRoute(
-            movieId = "1"
-        )
+
         viewModel = DetailsViewModel(
             observeMovieDetailsUseCase,
             setMovieFavouriteUseCase,
             savedStateHandle
         )
+
         advanceUntilIdle()
+
         // Then
         val state = viewModel.uiState.value
+
         assertEquals(
             DetailsUiState.Data(
                 title = "Batman",
@@ -91,47 +94,33 @@ class DetailsViewModelTest {
             state
         )
     }
-    @Test
-    fun observeMovie_whenMovieIsNull_keepsLoadingState() = runTest {
-        // Given
-        val savedStateHandle = mockk<SavedStateHandle>()
-        mockkStatic("androidx.navigation.SavedStateHandleKt")
 
-        every {
-            savedStateHandle.toRoute<DetailsRoute>()
-        } returns DetailsRoute(
-            movieId = "1"
-        )
+    @Test
+    fun `given unresolved movie, then uiState displays error state`() = runTest {
+        // Given
         every {
             observeMovieDetailsUseCase("1")
         } returns flowOf(null)
+
         // When
         val viewModel = DetailsViewModel(
             observeMovieDetailsUseCase,
             setMovieFavouriteUseCase,
             savedStateHandle
         )
+
         advanceUntilIdle()
+
         // Then
         assertEquals(
-            DetailsUiState.Loading,
+            DetailsUiState.Error("Could not resolve movie with movieId: 1"),
             viewModel.uiState.value
         )
-        unmockkStatic("androidx.navigation.SavedStateHandleKt")
     }
+
     @Test
-    fun onBackClicked_emitsBackNavigation() = runTest {
+    fun `when back clicked, back navigation target is emitted`() = runTest {
         // Given
-        val savedStateHandle = mockk<SavedStateHandle>()
-
-        mockkStatic("androidx.navigation.SavedStateHandleKt")
-
-        every {
-            savedStateHandle.toRoute<DetailsRoute>()
-        } returns DetailsRoute(
-            movieId = "1"
-        )
-
         every {
             observeMovieDetailsUseCase("1")
         } returns flowOf(null)
@@ -142,9 +131,10 @@ class DetailsViewModelTest {
             setMovieFavouriteUseCase,
             savedStateHandle
         )
-        // When + Then
+
+        // Then
         viewModel.navigation.test {
-            viewModel.onBackClicked()
+            viewModel.onAction(DetailsUiAction.BackClicked)
 
             advanceUntilIdle()
 
@@ -152,110 +142,93 @@ class DetailsViewModelTest {
                 DetailsNavigationTarget.Back,
                 awaitItem()
             )
+
             cancelAndIgnoreRemainingEvents()
         }
-        unmockkStatic("androidx.navigation.SavedStateHandleKt")
     }
+
     @Test
-    fun onFavouriteClicked_whenMovieIsNotFavourite_callsUseCaseWithTrue() = runTest {
-
-        // Given
-        val savedStateHandle = mockk<SavedStateHandle>()
-
-        mockkStatic("androidx.navigation.SavedStateHandleKt")
-
-        every {
-            savedStateHandle.toRoute<DetailsRoute>()
-        } returns DetailsRoute(
-            movieId = "1"
-        )
-        val movie = Movie(
-            id = "1",
-            title = "Batman",
-            overview = "Dark knight",
-            imageUrl = "image.jpg",
-            isFavorite = false
-        )
-
-        every {
-            observeMovieDetailsUseCase("1")
-        } returns flowOf(movie)
-
-        coEvery {
-            setMovieFavouriteUseCase(
+    fun `given non favorite movie, when favorite is clicked, then uiState sets isFavorite true`() =
+        runTest {
+            // Given
+            val movie = Movie(
                 id = "1",
-                isFavourite = true
+                title = "Batman",
+                overview = "Dark knight",
+                imageUrl = "image.jpg",
+                isFavorite = false
             )
-        } returns Unit
 
-        // When
-        val viewModel = DetailsViewModel(
-            observeMovieDetailsUseCase,
-            setMovieFavouriteUseCase,
-            savedStateHandle
-        )
-        advanceUntilIdle()
-        viewModel.onFavouriteClicked()
-        advanceUntilIdle()
-        // Then
-        coVerify(exactly = 1) {
-            setMovieFavouriteUseCase(
-                id = "1",
-                isFavourite = true
+            every {
+                observeMovieDetailsUseCase("1")
+            } returns flowOf(movie)
+
+            coEvery {
+                setMovieFavouriteUseCase(
+                    id = "1",
+                    isFavourite = true
+                )
+            } returns Unit
+            val viewModel = DetailsViewModel(
+                observeMovieDetailsUseCase,
+                setMovieFavouriteUseCase,
+                savedStateHandle
             )
+            advanceUntilIdle()
+
+            // When
+            viewModel.onAction(DetailsUiAction.FavoriteClicked)
+            advanceUntilIdle()
+
+            // Then
+            coVerify(exactly = 1) {
+                setMovieFavouriteUseCase(
+                    id = "1",
+                    isFavourite = true
+                )
+            }
         }
-        unmockkStatic("androidx.navigation.SavedStateHandleKt")
-    }
+
+
     @Test
-    fun onFavouriteClicked_whenMovieIsFavourite_callsUseCaseWithFalse() = runTest {
-
-        // Given
-        val savedStateHandle = mockk<SavedStateHandle>()
-
-        mockkStatic("androidx.navigation.SavedStateHandleKt")
-
-        every {
-            savedStateHandle.toRoute<DetailsRoute>()
-        } returns DetailsRoute(
-            movieId = "1"
-        )
-
-
-        val movie = Movie(
-            id = "1",
-            title = "Batman",
-            overview = "Dark knight",
-            imageUrl = "image.jpg",
-            isFavorite = true
-        )
-
-        every {
-            observeMovieDetailsUseCase("1")
-        } returns flowOf(movie)
-
-        coEvery {
-            setMovieFavouriteUseCase(
+    fun `given favorite movie, when favorite is clicked, then uiState sets isFavorite false`() =
+        runTest {
+            // Given
+            val movie = Movie(
                 id = "1",
-                isFavourite = false
+                title = "Batman",
+                overview = "Dark knight",
+                imageUrl = "image.jpg",
+                isFavorite = true
             )
-        } returns Unit
-        // When
-        val viewModel = DetailsViewModel(
-            observeMovieDetailsUseCase,
-            setMovieFavouriteUseCase,
-            savedStateHandle
-        )
-        // Περιμένουμε να γίνει Data state
-        advanceUntilIdle()
-        viewModel.onFavouriteClicked()
-        advanceUntilIdle()
-        // Then
-        coVerify(exactly = 1) {
-            setMovieFavouriteUseCase(
-                id = "1",
-                isFavourite = false
+
+            every {
+                observeMovieDetailsUseCase("1")
+            } returns flowOf(movie)
+
+            coEvery {
+                setMovieFavouriteUseCase(
+                    id = "1",
+                    isFavourite = false
+                )
+            } returns Unit
+            val viewModel = DetailsViewModel(
+                observeMovieDetailsUseCase,
+                setMovieFavouriteUseCase,
+                savedStateHandle
             )
+            advanceUntilIdle()
+
+            // When
+            viewModel.onAction(DetailsUiAction.FavoriteClicked)
+            advanceUntilIdle()
+
+            // Then
+            coVerify(exactly = 1) {
+                setMovieFavouriteUseCase(
+                    id = "1",
+                    isFavourite = false
+                )
+            }
         }
-        unmockkStatic("androidx.navigation.SavedStateHandleKt")
-    }
 }

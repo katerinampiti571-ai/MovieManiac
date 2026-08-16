@@ -1,6 +1,8 @@
 package com.example.videoclub.data.domain
 
-import com.example.videoclub.network.model.MovieResponseDto
+import com.example.videoclub.data.domain.model.Movie
+import com.example.videoclub.data.domain.model.PopularMoviesMetadata
+import com.example.videoclub.data.remote.model.MovieResponseDto
 import kotlinx.coroutines.flow.Flow
 
 interface MoviesRepository {
@@ -16,7 +18,7 @@ interface MoviesRepository {
     )
     fun observeFavoriteMovies(): Flow<List<Movie>>
 
-    suspend fun searchMovie(searchTerm: String): List<Movie>
+    suspend fun searchMovie(searchTerm: String): Result<List<Movie>>
 
-    suspend fun syncPopularMovies(page: Int): Result<MovieResponseDto>
+    suspend fun syncPopularMovies(page: Int): Result<PopularMoviesMetadata>
 }

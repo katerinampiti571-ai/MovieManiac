@@ -1,55 +1,58 @@
 package com.example.videoclub.favorites
 
 import android.util.Log
+import androidx.compose.ui.text.Paragraph
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.videoclub.favorites.usecase.ObserveFavoriteMoviesUseCase
+import com.example.videoclub.home.HomeUiAction
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
-    private val observeFavoriteMoviesUseCase: ObserveFavoriteMoviesUseCase
+    observeFavoriteMoviesUseCase: ObserveFavoriteMoviesUseCase
 ) : ViewModel() {
+
+    private val _navigation: MutableSharedFlow<FavoritesNavigationTarget> = MutableSharedFlow()
+    val navigation: SharedFlow<FavoritesNavigationTarget> = _navigation.asSharedFlow()
 
     val uiState: StateFlow<FavoritesUiState> =
         observeFavoriteMoviesUseCase().map { movies ->
-
-            Log.d(
-                "FAVORITES_VM",
-                "Movies received: $movies"
-            )
-
-            val state: FavoritesUiState =
-                FavoritesUiState.Data(
-                    movies = movies.map { movie ->
-                        FavoriteMovieUi(
-                            id = movie.id,
-                            title = movie.title,
-                            imageUrl = movie.imageUrl,
-                            isFavorite = movie.isFavorite
-                        )
-                    }
-                )
-
-            state
-        }
-            .catch { throwable ->
-                emit(
-                    FavoritesUiState.Error(
-                        message = throwable.message
-                            ?: "Could not load favorite movies"
+            FavoritesUiState.Data(
+                movies = movies.map { movie ->
+                    FavoriteMovieUi(
+                        id = movie.id,
+                        title = movie.title,
+                        imageUrl = movie.imageUrl,
+                        isFavorite = movie.isFavorite
                     )
-                )
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = FavoritesUiState.Loading
+                }
             )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(),
+            initialValue = FavoritesUiState.Loading
+        )
+
+    fun onAction(uiAction: FavoritesUiAction) {
+        when (uiAction) {
+            is FavoritesUiAction.MovieClicked -> onMovieClicked(uiAction.movieId)
+        }
+    }
+
+    private fun onMovieClicked(movieId: String) {
+        viewModelScope.launch {
+            _navigation.emit(FavoritesNavigationTarget.MovieDetails(movieId))
+        }
+    }
 }

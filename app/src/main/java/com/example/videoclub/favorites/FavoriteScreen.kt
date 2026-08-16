@@ -4,21 +4,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,6 +21,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +40,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.videoclub.R
 import com.example.videoclub.favorites.FavoritesUiState.Data
-import com.example.videoclub.homeScreen.HomeUiAction
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -52,23 +47,30 @@ data object FavoritesRoute
 
 @Composable
 fun FavoritesScreen(
-    onMovieClick: (String) -> Unit
+    onNavigate: (FavoritesNavigationTarget) -> Unit
 ) {
     val viewModel: FavoritesViewModel = hiltViewModel()
     val uiState: FavoritesUiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     FavoritesScreen(
         favoritesUiState = uiState,
-        onMovieClick = onMovieClick
+        onAction = {
+            viewModel.onAction(it)
+        },
     )
 
+    LaunchedEffect(Unit) {
+        viewModel.navigation.collect {
+            onNavigate(it)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
     favoritesUiState: FavoritesUiState,
-    onMovieClick: (String) -> Unit
+    onAction: (FavoritesUiAction) -> Unit
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -120,13 +122,13 @@ fun FavoritesScreen(
                             .fillMaxSize()
                             .padding(innerPadding),
                         contentPadding = PaddingValues(
-                            start = 32.dp,
-                            top = 32.dp,
-                            end = 32.dp,
+                            start = 24.dp,
+                            top = 24.dp,
+                            end = 24.dp,
                             bottom = 100.dp
                         ),
-                        horizontalArrangement = Arrangement.spacedBy(32.dp),
-                        verticalArrangement = Arrangement.spacedBy(32.dp)
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
                     ) {
                         items(
                             items = favoritesUiState.movies,
@@ -134,29 +136,16 @@ fun FavoritesScreen(
                         ) { movie ->
                             MoviePhotoFavorites(
                                 movie = movie,
-                                onMovieClick = onMovieClick,
-
+                                onMovieClick = {
+                                    onAction(FavoritesUiAction.MovieClicked(movieId = it))
+                                }
                             )
                         }
                     }
                 }
             }
-        is FavoritesUiState.Error -> {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(colorResource(R.color.primary)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = favoritesUiState.message,
-                color = Color.White
-            )
         }
     }
-    }
-}
 }
 
 @Composable
@@ -168,7 +157,7 @@ private fun EmptyFavoritesContent(
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "Δεν υπάρχουν αγαπημένες ταινίες",
+            text = stringResource(R.string.favorite_empty_state),
             color = Color.White,
             fontSize = 18.sp
         )
@@ -184,7 +173,7 @@ fun MoviePhotoFavorites(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.7f)
-            .clickable {onMovieClick(movie.id)},
+            .clickable { onMovieClick(movie.id) },
         model = ImageRequest.Builder(LocalContext.current)
             .data(movie.imageUrl)
             .placeholder(R.drawable.movie_cover)
@@ -219,26 +208,8 @@ private fun FavoritesScreenPreview() {
                     imageUrl = "",
                     isFavorite = true
                 ),
-                FavoriteMovieUi(
-                    id = "4",
-                    title = "Movie Four",
-                    imageUrl = "",
-                    isFavorite = true
-                ),
-                FavoriteMovieUi(
-                    id = "5",
-                    title = "Movie Five",
-                    imageUrl = "",
-                    isFavorite = true
-                ),
-                FavoriteMovieUi(
-                    id = "6",
-                    title = "Movie Six",
-                    imageUrl = "",
-                    isFavorite = true
-                )
             )
         ),
-        onMovieClick = {}
+        onAction = {}
     )
 }

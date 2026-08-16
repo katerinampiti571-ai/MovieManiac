@@ -1,17 +1,19 @@
 package com.example.videoclub.data
 
-import android.util.Log
-import com.example.videoclub.data.domain.Movie
+import com.example.videoclub.data.domain.model.Movie
 import com.example.videoclub.data.domain.MoviesRepository
-import com.example.videoclub.data.local.FavoritesEntity
+import com.example.videoclub.data.domain.model.PopularMoviesMetadata
+import com.example.videoclub.data.local.model.FavoritesEntity
 import com.example.videoclub.data.local.MovieDao
-import com.example.videoclub.data.local.MovieEntity
-import com.example.videoclub.network.MovieApiService
-import com.example.videoclub.network.NetworkEndpoints.IMAGES_BASE_URL
-import com.example.videoclub.network.model.MovieResponseDto
+import com.example.videoclub.data.local.model.MovieEntity
+import com.example.videoclub.data.mappers.toMovie
+import com.example.videoclub.data.mappers.toMovieEntity
+import com.example.videoclub.data.remote.MovieApiService
+import com.example.videoclub.data.remote.NetworkEndpoints.IMAGES_BASE_URL
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import okio.IOException
 
 import javax.inject.Inject
 
@@ -22,25 +24,23 @@ class MoviesRepositoryImpl @Inject constructor(
 
     override suspend fun syncPopularMovies(
         page: Int
-    ): Result<MovieResponseDto> {
+    ): Result<PopularMoviesMetadata> {
         return try {
             val response = apiService.getPopularMovies(
                 page = page
             )
             val movieEntities = response.popularMovies.map { movieDto ->
-                MovieEntity(
-                    id = movieDto.id,
-                    title = movieDto.title,
-                    overview = movieDto.overview,
-                    imageUrl = movieDto.imagePath?.let { imagePath ->
-                        IMAGES_BASE_URL + imagePath
-                    }.orEmpty()
-                )
+                movieDto.toMovieEntity()
             }
 
             movieDao.addMovies(movieEntities)
 
-            Result.success(response)
+            Result.success(
+                PopularMoviesMetadata(
+                    totalPages = response.totalPages,
+                    page = response.page,
+                )
+            )
 
         } catch (exception: Exception) {
             Result.failure(exception)
@@ -58,13 +58,7 @@ class MoviesRepositoryImpl @Inject constructor(
                     favoriteEntity.id == movieEntity.id
                 }
 
-                Movie(
-                    id = movieEntity.id,
-                    title = movieEntity.title,
-                    overview = movieEntity.overview,
-                    imageUrl = movieEntity.imageUrl,
-                    isFavorite = favorite?.isFavourite ?: false
-                )
+                movieEntity.toMovie(isFavorite = favorite?.isFavourite ?: false)
             }
         }
     }
@@ -80,18 +74,7 @@ class MoviesRepositoryImpl @Inject constructor(
             movieDao.observeMovie(id),
             movieDao.isFavorite(movieId = id)
         ) { movieEntity, isFavorite ->
-
-            if (movieEntity == null) {
-                null
-            } else {
-                Movie(
-                    id = movieEntity.id,
-                    title = movieEntity.title,
-                    overview = movieEntity.overview,
-                    imageUrl = movieEntity.imageUrl,
-                    isFavorite = isFavorite
-                )
-            }
+            movieEntity?.toMovie(isFavorite = isFavorite)
         }
     }
 
@@ -99,7 +82,7 @@ class MoviesRepositoryImpl @Inject constructor(
         id: String,
         isFavourite: Boolean
     ) {
-        movieDao.saveFavorites(
+        movieDao.setFavorite(
             FavoritesEntity(
                 id = id,
                 isFavourite = isFavourite
@@ -118,37 +101,33 @@ class MoviesRepositoryImpl @Inject constructor(
 
     override suspend fun searchMovie(
         searchTerm: String
-    ): List<Movie> {
+    ): Result<List<Movie>> {
         if (searchTerm.isBlank()) {
-            return emptyList()
+            return Result.success(emptyList())
         }
 
-        val response = apiService.search(
-            query = searchTerm
-        )
+        val response = try {
+            apiService.search(
+                query = searchTerm
+            )
+        } catch (e: Exception) {
+            return Result.failure(e)
+        }
 
         val movieEntities = response.popularMovies.map { movieDto ->
-            MovieEntity(
-                id = movieDto.id,
-                title = movieDto.title,
-                overview = movieDto.overview,
-                imageUrl = movieDto.imagePath?.let { imagePath ->
-                    IMAGES_BASE_URL + imagePath
-                }.orEmpty()
-            )
+            movieDto.toMovieEntity()
         }
 
         movieDao.addMovies(movieEntities)
 
-        return movieEntities.map { movieEntity ->
-            Movie(
-                id = movieEntity.id,
-                title = movieEntity.title,
-                overview = movieEntity.overview,
-                imageUrl = movieEntity.imageUrl,
-                isFavorite = false
-            )
-        }
+        return Result.success(
+            movieEntities.map { movieEntity ->
+                movieEntity.toMovie(
+                    // We don't care about isFavorite flag here
+                    isFavorite = false
+                )
+            }
+        )
     }
 }
 

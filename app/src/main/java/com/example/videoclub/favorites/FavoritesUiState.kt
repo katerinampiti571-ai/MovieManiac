@@ -13,8 +13,4 @@ sealed interface FavoritesUiState {
     data class Data(
         val movies: List<FavoriteMovieUi>
     ) : FavoritesUiState
-
-    data class Error(
-        val message: String
-    ) : FavoritesUiState
 }

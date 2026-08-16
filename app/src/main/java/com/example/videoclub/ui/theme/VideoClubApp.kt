@@ -1,13 +1,7 @@
 package com.example.videoclub.ui.theme
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,7 +21,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,16 +30,18 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.videoclub.R
-import com.example.videoclub.detailsScreen.DetailsNavigationTarget
-import com.example.videoclub.detailsScreen.DetailsRoute
-import com.example.videoclub.detailsScreen.DetailsScreen
+import com.example.videoclub.details.DetailsNavigationTarget
+import com.example.videoclub.details.DetailsRoute
+import com.example.videoclub.details.DetailsScreen
+import com.example.videoclub.favorites.FavoritesNavigationTarget
 import com.example.videoclub.favorites.FavoritesScreen
 import com.example.videoclub.favorites.FavoritesRoute
-import com.example.videoclub.homeScreen.HomeRoute
-import com.example.videoclub.homeScreen.HomeScreen
-import com.example.videoclub.homeScreen.HomeNavigationTarget
-import com.example.videoclub.searchScreen.SearchRoute
-import com.example.videoclub.searchScreen.SearchScreen
+import com.example.videoclub.home.HomeRoute
+import com.example.videoclub.home.HomeScreen
+import com.example.videoclub.home.HomeNavigationTarget
+import com.example.videoclub.search.SearchNavigationTarget
+import com.example.videoclub.search.SearchRoute
+import com.example.videoclub.search.SearchScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 
@@ -158,23 +153,31 @@ fun VideoClubApp() {
             }
             composable<SearchRoute> {
                 SearchScreen(
-                    onMovieClick = { movieId ->
-                        navController.navigate(
-                            DetailsRoute(
-                                movieId = movieId
-                            )
-                        )
+                    onNavigate = { target ->
+                        when (target) {
+                            is SearchNavigationTarget.Details -> {
+                                navController.navigate(
+                                    DetailsRoute(
+                                        movieId = target.movieId
+                                    )
+                                )
+                            }
+                        }
                     }
                 )
             }
             composable<FavoritesRoute> {
                 FavoritesScreen(
-                    onMovieClick = { movieId ->
-                        navController.navigate(
-                            DetailsRoute(
-                                movieId = movieId
-                            )
-                        )
+                    onNavigate = { target ->
+                        when (target) {
+                            is FavoritesNavigationTarget.MovieDetails -> {
+                                navController.navigate(
+                                    DetailsRoute(
+                                        movieId = target.movieId
+                                    )
+                                )
+                            }
+                        }
                     }
                 )
             }

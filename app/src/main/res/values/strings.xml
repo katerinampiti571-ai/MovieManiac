@@ -4,4 +4,11 @@
     <string name="Favorites">My favorites</string>
     <string name="Search">Search a movie</string>
     <string name="SearchBar">Search</string>
+
+    <!-- HomeScreen -->
+    <string name="home_header">Popular</string>
+
+    <!-- FavoritesScreen -->
+    <string name="favorite_empty_state">No favorite movies yet</string>
+    <string name="details_description">Description\n</string>
 </resources>

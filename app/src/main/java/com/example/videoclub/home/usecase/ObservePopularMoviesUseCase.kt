@@ -1,20 +1,18 @@
-package com.example.videoclub.favorites.usecase
+package com.example.videoclub.home.usecase
 
 import com.example.videoclub.data.domain.model.Movie
 import com.example.videoclub.data.domain.MoviesRepository
-import jakarta.inject.Inject
 import kotlinx.coroutines.flow.Flow
+import javax.inject.Inject
 
-interface ObserveFavoriteMoviesUseCase {
-
+interface ObservePopularMoviesUseCase {
     operator fun invoke(): Flow<List<Movie>>
 }
 
-class ObserveFavoriteMoviesUseCaseImpl @Inject constructor(
+class ObservePopularMoviesUseCaseImpl @Inject constructor(
     private val moviesRepository: MoviesRepository
-) : ObserveFavoriteMoviesUseCase {
-
+): ObservePopularMoviesUseCase{
     override fun invoke(): Flow<List<Movie>> {
-        return moviesRepository.observeFavoriteMovies()
+     return moviesRepository.observePopularMovies()
     }
 }

@@ -1,8 +1,8 @@
 package com.example.videoclub.di
 
 import com.example.videoclub.BuildConfig
-import com.example.videoclub.network.MovieApiService
-import com.example.videoclub.network.NetworkEndpoints
+import com.example.videoclub.data.remote.MovieApiService
+import com.example.videoclub.data.remote.NetworkEndpoints
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.example.videoclub.data.local.model.FavoritesEntity
+import com.example.videoclub.data.local.model.MovieEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -25,16 +27,14 @@ interface MovieDao {
 
     // Favorite
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun saveFavorites(favorite: FavoritesEntity)
+    suspend fun setFavorite(favorite: FavoritesEntity)
 
     @Query("SELECT * FROM favorites")
     fun observeFavorites(): Flow<List<FavoritesEntity>>
 
     @Query(
         """
-            SELECT EXISTS(
-                SELECT 1 FROM favorites WHERE id = :movieId AND isFavourite = 1
-            )
+            SELECT isFavourite FROM favorites WHERE id = :movieId
         """
     )
     fun isFavorite(movieId: String): Flow<Boolean>

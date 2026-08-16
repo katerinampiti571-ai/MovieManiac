@@ -2,6 +2,8 @@ package com.example.videoclub.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import com.example.videoclub.data.local.model.FavoritesEntity
+import com.example.videoclub.data.local.model.MovieEntity
 
 @Database(
     entities = [
