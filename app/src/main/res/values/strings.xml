@@ -1,4 +1,7 @@
 <resources>
-    <string name="app_name">MovieManiac</string>
+    <string name="app_name">Video Club</string>
     <string name="video_club">Video Club</string>
+    <string name="Favorites">My favorites</string>
+    <string name="Search">Search a movie</string>
+    <string name="SearchBar">Search</string>
 </resources>

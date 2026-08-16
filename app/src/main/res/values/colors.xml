@@ -9,4 +9,5 @@
     <color name="white">#FFFFFFFF</color>
     <color name="primary">#3A1A41</color>
     <color name="colorTest">#9B1F43</color>
+    <color name="bottomBar">#6A4E6E</color>
 </resources>
