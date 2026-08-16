@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MovieManiac"
+rootProject.name = "VideoClub"
 include(":app")
